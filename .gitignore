@@ -1,0 +1,23 @@
+# data from the course (too big)
+*.tsv
+*.h5
+
+# BM25 index files and temp files
+*.bin
+*.csv
+lexicon.txt
+blockmeta.txt
+
+# HNSW index and results
+*.faiss
+*.npy
+runs/
+*.qrels
+
+# compiled programs
+parser
+merger
+query-processor
+*.exe
+*.o
+__pycache__/

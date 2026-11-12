@@ -12,10 +12,10 @@
 #include <climits> // UINT_MAX
 #include <chrono>
 
-int num_results = 10;
-std::ofstream run_file;
-std::string current_qid;
-std::vector<int> pids;
+const int num_results = 1000; //Re-ranking (System 3) needs BM25’s top 1000
+std::ofstream results_file; // we use trec_eval: the grading tool 
+std::string current_query;
+std::vector<int> pids; 
 using total_score = std::pair<double, unsigned int>; // (total_score, docID)
 
 // loaded from stats.csv
@@ -246,11 +246,9 @@ void search_setup(const std::unordered_set<std::string>& terms, const std::unord
     }
 }
 
-
+//if none of the 1 million passages in the index contain any of the query’s words, the top-results list ends up empty. Then return stops the function, and nothing is written for that query.
 void print_results(std::priority_queue<total_score, std::vector<total_score>, std::greater<total_score>> top_results){
     if (top_results.empty()) {
-        if (run_file.is_open()) return;          // ADD
-        std::cout << "no results" << std::endl;
         return;
     }
     
@@ -261,18 +259,11 @@ void print_results(std::priority_queue<total_score, std::vector<total_score>, st
         top_results.pop();
     }
 
-    if (run_file.is_open()) {                    // ADD (whole block)
-        int rank = 1;
-        for (auto it = final_results.rbegin(); it != final_results.rend(); ++it)
-            run_file << current_qid << " Q0 " << pids[it->second] << " " << rank++ << " " << it->first << " bm25\n";
-        return;
-    }
-
-    
-    // print in reverse
-    std::cout << "docID | score"  << std::endl;
+    // write in reverse (best first): query_id Q0 passage_id rank score bm25, basically the queries come from 
+    int rank = 1;
     for (auto it = final_results.rbegin(); it != final_results.rend(); ++it){
-        std::cout << it->second << " | " << it->first << std::endl;
+        results_file << current_query << " Q0 " << pids[it->second] << " " << rank << " " << it->first << " bm25\n";
+        rank++;
     }
 }
 
@@ -369,8 +360,7 @@ void conjunctive_search(std::vector<lexicon_data>& term_data, std::vector<Postin
     }
 }
 
-int main(int argc, char** argv) {
-    bool batch = argc >= 3;
+int main() {
     std::string line; // temp string for parsing files
 
     // get statistics for BM25 ranking function
@@ -422,9 +412,9 @@ int main(int argc, char** argv) {
     while ( std::getline(pagetable_file, line) ){
         std::stringstream ss(line);
 
-        ss >> doc_id >> deliminator >> word_count;
+        ss >> doc_id >> deliminator >> word_count; // deliminator is a comma, ss is the stringstream for the line
         word_counts.push_back(word_count);
-        pids.push_back(doc_id);
+        pids.push_back(doc_id);   // remember the real passage ID
     }
 
     std::cout << "loaded " << word_counts.size() << " word counts" << std::endl;
@@ -433,34 +423,20 @@ int main(int argc, char** argv) {
     // open index.bin once
     static std::ifstream index_file("index.bin", std::ios::binary);
 
-    std::ifstream queries_file;
-    if (batch) {
-        queries_file.open(argv[1]);
-        run_file.open(argv[2]);
-        num_results = 1000;
-    }
-    int num_queries = 0;
-    auto start_time = std::chrono::steady_clock::now();
+    // run the 3 prepared query files, one after another
+    std::vector<std::string> sets = {"dl19", "dl20", "dev"};
+    for (std::string s : sets) {
+        std::ifstream queries_file(s + ".queries.tsv");  // e.g. dl19.queries.tsv
+        results_file.open("bm25_" + s + ".txt");         // e.g. bm25_dl19.txt
+        int num_queries = 0;
+        auto start = std::chrono::steady_clock::now();
 
-    // query loop
-    while (true){
-        std::string query_type;
-        std::string query;
-        if (batch) {
-            if (!std::getline(queries_file, line)) break;
-            size_t tab = line.find('\t');
-            if (tab == std::string::npos) continue;
-            current_qid = line.substr(0, tab);
-            query = line.substr(tab + 1);
-            query_type = "disjunctive";
-            num_queries++;
-        } else {
-            std::cout << "disjunctive or conjunctive : ";
-            std::getline(std::cin, query_type);
-            if (query_type != "disjunctive" && query_type != "conjunctive") break;
-            std::cout << "enter query : ";
-            std::getline(std::cin, query);
-        }
+    while (std::getline(queries_file, line)){
+        size_t tab = line.find('\t');
+        if (tab == std::string::npos) continue;
+        current_query = line.substr(0, tab);         // query ID
+        std::string query = line.substr(tab + 1);    // query text
+        num_queries++;
 
         // normalize query
         for (char& c : query){
@@ -470,6 +446,7 @@ int main(int argc, char** argv) {
                 c = ' ';
             }
         }
+        
         // parse query
         std::unordered_set<std::string> query_terms;
         std::stringstream ss(query);
@@ -490,15 +467,17 @@ int main(int argc, char** argv) {
         // set every reader on its first posting
         for (std::size_t i = 0; i < readers.size(); i++) readers[i].seek(0);
         
-        if (query_type == "disjunctive"){
-            disjunctive_search(term_data, readers, word_counts);
-        } else if (term_data.size() == query_terms.size()) { // conjunctive + make sure that all terms exist
-            conjunctive_search(term_data, readers, word_counts);
-        }
+        disjunctive_search(term_data, readers, word_counts);
     }
-        if (batch) {
-        double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - start_time).count();
-        std::cout << "queries: " << num_queries << "  avg ms/query: " << 1000.0 * secs / num_queries << std::endl;
+        results_file.close();
+        double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        std::cout << s << ": " << num_queries << " queries, " << 1000 * seconds / num_queries << " ms per query" << std::endl;
     }
     return 0;
 }
+
+//my own notes 
+// Answer key file	For which queries
+// qrels.eval.one.tsv	dl19 (TREC 2019)
+// qrels.eval.two.tsv	dl20 (TREC 2020)
+// qrels.dev.tsv	dev

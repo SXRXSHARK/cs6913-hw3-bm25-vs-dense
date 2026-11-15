@@ -56,7 +56,7 @@ def build_hnsw(passage_vectors, M, efc): # we build a graph of the passage vecto
     index = faiss.IndexHNSWFlat(384, M, faiss.METRIC_INNER_PRODUCT) # vectors have 384 dimensions, M is the number of connections per node, and we use inner product as the distance metric
     index.hnsw.efConstruction = efc # sets the number of connections to consider during the construction of the graph.
     start = time.time() # how long it takes to build the index
-    index.add(passage_vectors) # build the graph 
+    index.add(passage_vectors) # build the graph  (This is used to build the index)
     print("build time:", time.time() - start, "seconds")
     return index
 
@@ -113,8 +113,24 @@ def reranking(bm25_file, k, out_file): # this is to read the passages BM25 has f
 # evaluate the results using trec_eval. (This is the fifth step of the assignment)
 
 
-if __name__ == "__main__":                              
+if __name__ == "__main__":      
+    if sys.argv[1] == "prepare":
+        prepare("qrels.eval.one.tsv", "queries.eval.tsv", "dl19")
+        prepare("qrels.eval.two.tsv", "queries.eval.tsv", "dl20")
+        prepare("qrels.dev.tsv", "queries.dev.tsv", "dev")  
+
     if sys.argv[1] == "hnsw":
+        passage_ids, passage_vectors = load_vectors("msmarco_passages_embeddings_subset.h5")
+        query_ids, query_vectors = load_vectors("msmarco_queries_dev_eval_embeddings.h5")
+        passage_row = {pid: i for i, pid in enumerate(passage_ids)}
+        query_row = {qid: i for i, qid in enumerate(query_ids)}
+
+        for M, efc in [(4, 50), (8, 200)]:
+                    index = build_hnsw(passage_vectors, M, efc)
+                    for s in ["dl19", "dl20", "dev"]:
+                        search_hnsw(index, s + ".queries.tsv", f"hnsw_M{M}_{s}.txt")
+
+    if sys.argv[1] == "rerank":
         passage_ids, passage_vectors = load_vectors("msmarco_passages_embeddings_subset.h5")
         query_ids, query_vectors = load_vectors("msmarco_queries_dev_eval_embeddings.h5")
         passage_row = {pid: i for i, pid in enumerate(passage_ids)}
@@ -123,13 +139,6 @@ if __name__ == "__main__":
         for k in [100, 1000]:
             for s in ["dl19", "dl20", "dev"]:
                 reranking(f"bm25_{s}.txt", k, f"rerank{k}_{s}.txt")
-
-        for M, efc in [(4, 50), (8, 200)]:
-            index = build_hnsw(passage_vectors, M, efc)
-            for s in ["dl19", "dl20", "dev"]:
-                search_hnsw(index, s + ".queries.tsv", f"hnsw_M{M}_{s}.txt")
-
-
 
 #.h5 are vector files in this assignment which will be used for system 2 and system 3. The .tsv files are text files which will be used for system 1 and system 3 for reranking.
 # HNSW stands for Hierarchical Navigable Small World. It’s a fast way to find the vectors closest to a query vector, without comparing the query against all 1 million passages.
@@ -148,3 +157,4 @@ if __name__ == "__main__":
 # System 1 finds passages by words.
 # System 2 finds passages by meaning, searching all 1M with the HNSW graph.
 # System 3 finds passages by words, then orders them by meaning.
+# System 1 is the fastest but system 2 is the most accurate. System 3 is a compromise between speed and accuracy. 

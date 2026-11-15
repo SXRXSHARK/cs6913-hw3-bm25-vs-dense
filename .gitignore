@@ -21,3 +21,4 @@ query-processor
 *.exe
 *.o
 __pycache__/trec_eval/
+trec_eval/

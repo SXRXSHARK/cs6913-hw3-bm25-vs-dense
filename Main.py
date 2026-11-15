@@ -5,6 +5,7 @@ import h5py
 import numpy as np
 import faiss
 
+# the vector files are msmarco_passages_embeddings_subset.h5 and msmarco_queries_dev_eval_embeddings.h5. The .tsv files are dl19.queries.tsv, dl20.queries.tsv, and dev.queries.tsv. The .qrels files are dl19.qrels, dl20.qrels, and dev.qrels.
 def load_vectors(file_name):
     file = h5py.File(file_name, "r") # open the h5 file in read mode              
     ids = file["id"][:].astype(str) # convert the ids to string 
@@ -80,7 +81,35 @@ def search_hnsw(index, queries_file, out_file):
     out.close()
     print(out_file, "ms per query:", 1000 * total / len(queries))
 
-# re ranking which is the to combine system 1 and 2 into system 3. (This is the fourth step of the assignment)
+# reranking which is the to combine system 1 and 2 into system 3. (This is the fourth step of the assignment)
+def reranking(bm25_file, k, out_file): # this is to read the passages BM25 has found by words and rerank them by meaning using the HNSW index.
+    top_k = {} # empty dictionary to store the top k passages for each query
+    for line in open(bm25_file): 
+        qid, _, pid, rank, _, _ = line.split() # split the line into its components
+        if int(rank) <= k:
+            if qid not in top_k:
+                top_k[qid] = []
+            top_k[qid].append(pid) # add the passage ID to the list of top k passages for this question 
+
+    out = open(out_file, "w") # open the output file in write mode to store the reranked results
+    total = 0
+
+    for qid in top_k: # for each question in the top k passages
+        pids = top_k[qid] # get the passage IDs for this question
+        start = time.time() # start the timer to measure how long it takes to rerank the passages
+        vectors = passage_vectors[[passage_row[p] for p in pids]] # get the vectors for the top k passages
+        scores = vectors @ query_vectors[query_row[qid]] # compute the inner product between the passage vectors and the query vector to get the scores
+        results = sorted(zip(scores, pids), reverse=True) # sort the results by score in descending order
+        total += time.time() - start # add the time taken to rerank this question's passages to the total time
+
+        rank = 1 # initialize the rank counter to 1
+        for score, pid in results: # write the reranked results to the output file
+            out.write(f"{qid} Q0 {pid} {rank} {score} rerank{k}\n") # write the question ID, passage ID, rank, score, and the name of the reranking method to the output file
+            rank += 1
+
+    out.close()
+    print(out_file, "ms per query:", 1000 * total / len(top_k))
+
 # evaluate the results using trec_eval. (This is the fifth step of the assignment)
 
 
@@ -88,7 +117,12 @@ if __name__ == "__main__":
     if sys.argv[1] == "hnsw":
         passage_ids, passage_vectors = load_vectors("msmarco_passages_embeddings_subset.h5")
         query_ids, query_vectors = load_vectors("msmarco_queries_dev_eval_embeddings.h5")
-        query_row = {qid: i for i, qid in enumerate(query_ids)} 
+        passage_row = {pid: i for i, pid in enumerate(passage_ids)}
+        query_row = {qid: i for i, qid in enumerate(query_ids)}
+
+        for k in [100, 1000]:
+            for s in ["dl19", "dl20", "dev"]:
+                reranking(f"bm25_{s}.txt", k, f"rerank{k}_{s}.txt")
 
         for M, efc in [(4, 50), (8, 200)]:
             index = build_hnsw(passage_vectors, M, efc)
@@ -103,7 +137,7 @@ if __name__ == "__main__":
 # load_vectors: read the vectors from the .h5 files.
 # read_queries, read_qrels, prepare: get the questions and answer keys ready.
 # build_hnsw, search_hnsw: System 2.
-# rerank: System 3.
+# reranking: System 3.
 # evaluate: grade everything with trec_eval.
 # The bottom section: which part runs when you type python Main.py <step>.
 # we must run the code in the order of system 1, system 2, and system 3.

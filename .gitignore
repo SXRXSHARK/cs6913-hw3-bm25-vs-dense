@@ -20,4 +20,4 @@ merger
 query-processor
 *.exe
 *.o
-__pycache__/
+__pycache__/trec_eval/

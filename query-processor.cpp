@@ -464,7 +464,7 @@ int main() {
             continue;
         }
 
-        // set every reader on its first posting
+        // set every reader on its first posting 
         for (std::size_t i = 0; i < readers.size(); i++) readers[i].seek(0);
         
         disjunctive_search(term_data, readers, word_counts);

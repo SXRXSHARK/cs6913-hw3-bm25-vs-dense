@@ -8,7 +8,7 @@
 #include <vector>
 #include <set>
 #include <chrono>
-#include <unordered_set>
+#include <unordered_set> 
 #include <cstdio> // For std::remove
 
 std::string line;
@@ -25,6 +25,7 @@ int main() {
         return 1;
     }
 
+   // this is the new feature added to the code, which is to only keep the passages that are in the 1M subset. 
     std::ifstream subset ("msmarco_passages_subset.tsv");
     std::unordered_set<std::string> keep; // keep is an empty {}
     std::string subset_line; // subset_line is a string that will hold each line of the subset file
@@ -49,7 +50,7 @@ int main() {
         size_t tab = line.find('\t'); // find the tab which is between the ID and the text
         if (tab == std::string::npos) continue; // this is to skip lines with no tab
         std::string DocID = line.substr(0, tab); // take the ID before the tab
-        if (keep.find(DocID) == keep.end()) continue; // not in the 1M subset, skip it
+        if (keep.find(DocID) == keep.end()) continue; // not in the 1M subset, skip it // also added
         std::string text = line.substr(tab + 1); // take the text after the tab
         for (char& c : text) { // it goes through letter by letter
             if (isalnum(static_cast<unsigned char>(c))) c = static_cast<char>(tolower(c)); // keep letters and numbers, make lowercase, isalnum checks if the character is alphanumeric, tolower converts it to lowercase

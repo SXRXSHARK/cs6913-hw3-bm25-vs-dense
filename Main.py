@@ -110,9 +110,15 @@ def reranking(bm25_file, k, out_file): # this is to read the passages BM25 has f
     out.close()
     print(out_file, "ms per query:", 1000 * total / len(top_k))
 
-# evaluate the results using trec_eval. (This is the fifth step of the assignment)
-def evaluate(trec_eval, qrels_file, results_file):
-    return None
+# evaluate the results using trec_eval
+def evaluate(qrels_file, run_file, name, trec_eval_path):
+    if name == "dev":
+        cmd = [trec_eval_path, "-m", "recip_rank", "-M", "10", "-m", "recall.100", "-m", "map", qrels_file, run_file]
+    else:
+        cmd = [trec_eval_path, "-m", "recip_rank", "-M", "10", "-m", "recall.100", "-m", "ndcg_cut.10", "-m", "ndcg_cut.100", qrels_file, run_file]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    print(result.stdout)
 
 if __name__ == "__main__":      
     if sys.argv[1] == "prepare":
@@ -142,6 +148,18 @@ if __name__ == "__main__":
                 reranking(f"bm25_{s}.txt", k, f"rerank{k}_{s}.txt")
 
     if sys.argv[1] == "evaluate":
+        trec_eval_path = "trec_eval"
+
+        for s in ["dl19", "dl20", "dev"]:
+            qrels_file = s + ".qrels"
+            # evaluate BM25
+            evaluate(qrels_file, f"bm25_{s}.txt", s, trec_eval_path)
+            # evaluate HNSW for both parameter settings
+            for M, efc in [(4, 50), (8, 200)]:
+                evaluate(qrels_file, f"hnsw_M{M}_{s}.txt", s, trec_eval_path)
+            # evaluate reranking for both candidate list sizes
+            for k in [100, 1000]:
+                evaluate(qrels_file, f"rerank{k}_{s}.txt", s, trec_eval_path)
         
 
 #.h5 are vector files in this assignment which will be used for system 2 and system 3. The .tsv files are text files which will be used for system 1 and system 3 for reranking.

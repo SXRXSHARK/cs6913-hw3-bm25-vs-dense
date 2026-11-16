@@ -111,7 +111,8 @@ def reranking(bm25_file, k, out_file): # this is to read the passages BM25 has f
     print(out_file, "ms per query:", 1000 * total / len(top_k))
 
 # evaluate the results using trec_eval. (This is the fifth step of the assignment)
-
+def evaluate(trec_eval, qrels_file, results_file):
+    return None
 
 if __name__ == "__main__":      
     if sys.argv[1] == "prepare":
@@ -139,6 +140,9 @@ if __name__ == "__main__":
         for k in [100, 1000]:
             for s in ["dl19", "dl20", "dev"]:
                 reranking(f"bm25_{s}.txt", k, f"rerank{k}_{s}.txt")
+
+    if sys.argv[1] == "evaluate":
+        
 
 #.h5 are vector files in this assignment which will be used for system 2 and system 3. The .tsv files are text files which will be used for system 1 and system 3 for reranking.
 # HNSW stands for Hierarchical Navigable Small World. It’s a fast way to find the vectors closest to a query vector, without comparing the query against all 1 million passages.

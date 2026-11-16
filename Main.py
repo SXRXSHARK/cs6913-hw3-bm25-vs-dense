@@ -61,8 +61,8 @@ def build_hnsw(passage_vectors, M, efc): # we build a graph of the passage vecto
     return index
 
 # this is the search function for the HNSW index. It takes the index, a file containing queries, and an output file to write the results. (This is the third step of the assignment)
-def search_hnsw(index, queries_file, out_file, efs):
-    index.hnsw.efSearch = efs # how many candidates the graph explores per query 
+def search_hnsw(index, queries_file, out_file, efs, k=100):
+    index.hnsw.efSearch = efs # how many candidates the graph explores per query, much be >= the number of results returned
     queries = read_queries(queries_file) # open the queries file and read the queries into a dictionary
     out = open(out_file, "w") # open the output file in write mode to store the results
     total = 0 # time counter to measure how long it takes to search for all queries.
@@ -71,10 +71,14 @@ def search_hnsw(index, queries_file, out_file, efs):
         vector = query_vectors[query_row[qid]].reshape(1, -1) # this question's 384 numbers
 
         start = time.time()
-        scores, rows = index.search(vector, 1000) # find the 1000 closest passages
+        scores, rows = index.search(vector,k) 
         total += time.time() - start
 
-        for rank in range(1000):
+        n = rows.shape[1]
+        for rank in range(n):
+            if rows[0][rank] == -1: # faiss pads with -1 when it can't fill the array --> stop writing
+                break
+
             pid = passage_ids[rows[0][rank]] # row number to real passage ID
             out.write(f"{qid} Q0 {pid} {rank + 1} {scores[0][rank]} hnsw\n")
 
@@ -114,12 +118,24 @@ def reranking(bm25_file, k, out_file): # this is to read the passages BM25 has f
 # evaluate the results using trec_eval
 def evaluate(qrels_file, run_file, name, trec_eval_path):
     if name == "dev":
-        cmd = [trec_eval_path, "-m", "recip_rank", "-M", "10", "-m", "recall.100", "-m", "map", qrels_file, run_file]
+        metrics = [
+            ("MAP", ["-m", "map"]),
+            ("MRR@10", ["-m", "recip_rank", "-M", "10"]),
+            ("Recall@100", ["-m", "recall.100"]),
+        ]
     else:
-        cmd = [trec_eval_path, "-m", "recip_rank", "-M", "10", "-m", "recall.100", "-m", "ndcg_cut.10", "-m", "ndcg_cut.100", qrels_file, run_file]
+        metrics = [
+            ("MRR@10", ["-m", "recip_rank", "-M", "10"]),
+            ("Recall@100", ["-m", "recall.100"]),
+            ("NDCG@10", ["-m", "ndcg_cut.10"]),
+            ("NDCG@100", ["-m", "ndcg_cut.100"]),
+        ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    print(result.stdout)
+    for label, args in metrics:
+        cmd = [trec_eval_path] + args + [qrels_file, run_file]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        value = result.stdout.strip().split()[-1] if result.stdout.strip() else "N/A"
+        print(f"{label}      {run_file}      {value}")
 
 if __name__ == "__main__":      
     if sys.argv[1] == "prepare":
@@ -133,10 +149,10 @@ if __name__ == "__main__":
         passage_row = {pid: i for i, pid in enumerate(passage_ids)}
         query_row = {qid: i for i, qid in enumerate(query_ids)}
 
-        for M, efc in [(4, 50), (8, 200)]:
+        for M, efc, efs in [(4, 100, 100), (8, 200, 200)]:
                     index = build_hnsw(passage_vectors, M, efc)
                     for s in ["dl19", "dl20", "dev"]:
-                        search_hnsw(index, s + ".queries.tsv", f"hnsw_M{M}_{s}.txt", efc)
+                        search_hnsw(index, s + ".queries.tsv", f"hnsw_M{M}_{s}.txt", efs, 100)
 
     if sys.argv[1] == "rerank":
         passage_ids, passage_vectors = load_vectors("msmarco_passages_embeddings_subset.h5")
@@ -156,9 +172,9 @@ if __name__ == "__main__":
             # evaluate BM25
             evaluate(qrels_file, f"bm25_{s}.txt", s, trec_eval_path)
             # evaluate HNSW for both parameter settings
-            for M, efc in [(4, 50), (8, 200)]:
+            for M, efc, efs in [(4, 100, 100), (8, 200, 200)]:
                 evaluate(qrels_file, f"hnsw_M{M}_{s}.txt", s, trec_eval_path)
-            # evaluate reranking for both candidate list sizes
+            # evaluate reranking for both candidate list sizess
             for k in [100, 1000]:
                 evaluate(qrels_file, f"rerank{k}_{s}.txt", s, trec_eval_path)
         
@@ -180,4 +196,3 @@ if __name__ == "__main__":
 # System 1 finds passages by words.
 # System 2 finds passages by meaning, searching all 1M with the HNSW graph.
 # System 3 finds passages by words, then orders them by meaning.
-# System 1 is the fastest but system 2 is the most accurate. System 3 is a compromise between speed and accuracy. 

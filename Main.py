@@ -61,8 +61,8 @@ def build_hnsw(passage_vectors, M, efc): # we build a graph of the passage vecto
     return index
 
 # this is the search function for the HNSW index. It takes the index, a file containing queries, and an output file to write the results. (This is the third step of the assignment)
-def search_hnsw(index, queries_file, out_file):
-    index.hnsw.efSearch = 1000 # as asked in the assignment, we set the number to 1000. 
+def search_hnsw(index, queries_file, out_file, efs):
+    index.hnsw.efSearch = efs # how many candidates the graph explores per query 
     queries = read_queries(queries_file) # open the queries file and read the queries into a dictionary
     out = open(out_file, "w") # open the output file in write mode to store the results
     total = 0 # time counter to measure how long it takes to search for all queries.
@@ -135,7 +135,7 @@ if __name__ == "__main__":
         for M, efc in [(4, 50), (8, 200)]:
                     index = build_hnsw(passage_vectors, M, efc)
                     for s in ["dl19", "dl20", "dev"]:
-                        search_hnsw(index, s + ".queries.tsv", f"hnsw_M{M}_{s}.txt")
+                        search_hnsw(index, s + ".queries.tsv", f"hnsw_M{M}_{s}.txt", efc)
 
     if sys.argv[1] == "rerank":
         passage_ids, passage_vectors = load_vectors("msmarco_passages_embeddings_subset.h5")

@@ -13,6 +13,7 @@ blockmeta.txt
 *.npy
 runs/
 *.qrels
+*.txt
 
 # compiled programs
 parser

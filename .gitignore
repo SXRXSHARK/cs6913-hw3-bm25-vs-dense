@@ -23,3 +23,6 @@ query-processor
 *.o
 __pycache__/trec_eval/
 trec_eval/
+
+# python virtual environment
+*.venv/

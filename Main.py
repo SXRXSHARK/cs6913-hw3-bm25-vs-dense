@@ -98,7 +98,8 @@ def reranking(bm25_file, k, out_file): # this is to read the passages BM25 has f
         pids = top_k[qid] # get the passage IDs for this question
         start = time.time() # start the timer to measure how long it takes to rerank the passages
         vectors = passage_vectors[[passage_row[p] for p in pids]] # get the vectors for the top k passages
-        scores = vectors @ query_vectors[query_row[qid]] # compute the inner product between the passage vectors and the query vector to get the scores
+        with np.errstate(all="ignore"):
+            scores = vectors @ query_vectors[query_row[qid]] # compute the inner product between the passage vectors and the query vector to get the scores
         results = sorted(zip(scores, pids), reverse=True) # sort the results by score in descending order
         total += time.time() - start # add the time taken to rerank this question's passages to the total time
 
@@ -148,7 +149,7 @@ if __name__ == "__main__":
                 reranking(f"bm25_{s}.txt", k, f"rerank{k}_{s}.txt")
 
     if sys.argv[1] == "evaluate":
-        trec_eval_path = "trec_eval"
+        trec_eval_path = "./trec_eval/trec_eval"
 
         for s in ["dl19", "dl20", "dev"]:
             qrels_file = s + ".qrels"

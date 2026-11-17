@@ -7,6 +7,10 @@ import faiss
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 
+MS     = [4, 8]
+EFCS   = [50, 100, 150, 200]
+EFSS   = [100, 150, 200]
+
 # the vector files are msmarco_passages_embeddings_subset.h5 and msmarco_queries_dev_eval_embeddings.h5. The .tsv files are dl19.queries.tsv, dl20.queries.tsv, and dev.queries.tsv. The .qrels files are dl19.qrels, dl20.qrels, and dev.qrels.
 def load_vectors(file_name):
     file = h5py.File(file_name, "r") # open the h5 file in read mode              
@@ -138,15 +142,14 @@ def evaluate(qrels_file, run_file, name, trec_eval_path):
         result = subprocess.run(cmd, capture_output=True, text=True)
         value = result.stdout.strip().split()[-1] if result.stdout.strip() else "N/A"
         print(f"{label}      {run_file}      {value}")
-<<<<<<< HEAD
 
-# plots asked for by the TAs
-METRICS = ["MRR@10", "NDCG@10", "MAP"]
+METRICS = ["MRR@10", "NDCG@10", "NDCG@100", "MAP"]
 
 def per_query(qrels_file, run_file, metric):
     # trec_eval -q gives one score per question; returns {query ID: score}
     args = {"MRR@10": ["-M", "10", "-m", "recip_rank"],
             "NDCG@10": ["-m", "ndcg_cut.10"],
+            "NDCG@100": ["-m", "ndcg_cut.100"],
             "MAP": ["-m", "map"]}[metric]
     output = subprocess.run(["./trec_eval/trec_eval", "-q"] + args + [qrels_file, run_file],
                             capture_output=True, text=True).stdout
@@ -207,7 +210,7 @@ def plot_query_length(s="dev"):
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
     for ax, metric in zip(axes, METRICS):
-        for system in ["bm25", "hnsw_M8", "rerank1000"]:
+        for system in ["bm25", "hnsw_M8_efc200_efs200", "rerank1000"]:
             scores = per_query(s + ".qrels", f"{system}_{s}.txt", metric)
             groups = {}                                       # length -> scores of those questions
             for qid in scores:
@@ -223,8 +226,6 @@ def plot_query_length(s="dev"):
         ax.legend()
     plt.tight_layout()
     plt.savefig("query_length.png", dpi=150)
-=======
->>>>>>> 7ffdaf18676875e624ab6097308c469b2ff7a443
 
 if __name__ == "__main__":      
     if sys.argv[1] == "prepare":
@@ -238,10 +239,15 @@ if __name__ == "__main__":
         passage_row = {pid: i for i, pid in enumerate(passage_ids)}
         query_row = {qid: i for i, qid in enumerate(query_ids)}
 
-        for M, efc, efs in [(4, 100, 100), (8, 200, 200)]:
-                    index = build_hnsw(passage_vectors, M, efc)
+        for M in MS:
+            for efc in EFCS:
+                index = build_hnsw(passage_vectors, M, efc)   # build once per (M, efc)
+                for efs in EFSS:
+                    if efs < 100:                              # k=100 in search_hnsw, so efs must be >= 100
+                        continue
                     for s in ["dl19", "dl20", "dev"]:
-                        search_hnsw(index, s + ".queries.tsv", f"hnsw_M{M}_{s}.txt", efs, 100)
+                        search_hnsw(index, s + ".queries.tsv",
+                                    f"hnsw_M{M}_efc{efc}_efs{efs}_{s}.txt", efs, 100)
 
     if sys.argv[1] == "rerank":
         passage_ids, passage_vectors = load_vectors("msmarco_passages_embeddings_subset.h5")
@@ -260,12 +266,26 @@ if __name__ == "__main__":
             qrels_file = s + ".qrels"
             # evaluate BM25
             evaluate(qrels_file, f"bm25_{s}.txt", s, trec_eval_path)
-            # evaluate HNSW for both parameter settings
-            for M, efc, efs in [(4, 100, 100), (8, 200, 200)]:
-                evaluate(qrels_file, f"hnsw_M{M}_{s}.txt", s, trec_eval_path)
-            # evaluate reranking for both candidate list sizess
+            # evaluate HNSW across the full grid
+            for M in MS:
+                for efc in EFCS:
+                    for efs in EFSS:
+                        if efs < 100:
+                            continue
+                        evaluate(qrels_file, f"hnsw_M{M}_efc{efc}_efs{efs}_{s}.txt", s, trec_eval_path)
+            # evaluate reranking for both candidate list sizes
             for k in [100, 1000]:
                 evaluate(qrels_file, f"rerank{k}_{s}.txt", s, trec_eval_path)
+
+    if sys.argv[1] == "plot":
+        # Load the vectors into memory so rerank_keep_rest() can use them
+        passage_ids, passage_vectors = load_vectors("msmarco_passages_embeddings_subset.h5")
+        query_ids, query_vectors = load_vectors("msmarco_queries_dev_eval_embeddings.h5")
+        passage_row = {pid: i for i, pid in enumerate(passage_ids)}
+        query_row = {qid: i for i, qid in enumerate(query_ids)}
+
+        plot_rerank_k()
+        plot_query_length("dev")
         
 
 #.h5 are vector files in this assignment which will be used for system 2 and system 3. The .tsv files are text files which will be used for system 1 and system 3 for reranking.

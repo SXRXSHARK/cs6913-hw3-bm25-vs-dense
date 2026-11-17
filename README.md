@@ -12,6 +12,7 @@
   .venv/bin/python Main.py hnsw
   .venv/bin/python Main.py rerank
   .venv/bin/python Main.py evaluate
+  .venv/bin/python Main.py plot
 
 - install and compile trec_eval:
   git clone https://github.com/usnistgov/trec_eval.git

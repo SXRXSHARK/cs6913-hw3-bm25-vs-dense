@@ -138,6 +138,7 @@ def evaluate(qrels_file, run_file, name, trec_eval_path):
         result = subprocess.run(cmd, capture_output=True, text=True)
         value = result.stdout.strip().split()[-1] if result.stdout.strip() else "N/A"
         print(f"{label}      {run_file}      {value}")
+<<<<<<< HEAD
 
 # plots asked for by the TAs
 METRICS = ["MRR@10", "NDCG@10", "MAP"]
@@ -222,6 +223,8 @@ def plot_query_length(s="dev"):
         ax.legend()
     plt.tight_layout()
     plt.savefig("query_length.png", dpi=150)
+=======
+>>>>>>> 7ffdaf18676875e624ab6097308c469b2ff7a443
 
 if __name__ == "__main__":      
     if sys.argv[1] == "prepare":

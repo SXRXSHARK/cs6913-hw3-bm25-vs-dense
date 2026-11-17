@@ -30,10 +30,8 @@ int main() {
     std::unordered_set<std::string> keep; // keep is an empty {}
     std::string subset_line; // subset_line is a string that will hold each line of the subset file
     while (std::getline(subset, subset_line)) { // grab the line from the subset file
-        size_t tab = subset_line.find('\t'); // find the tab which is between the ID and the text
-        if (tab != std::string::npos) { // this is to skip lines with no tab
-            keep.insert(subset_line.substr(0, tab)); // take the ID before the tab and insert it into the keep set
-        }
+        if (!subset_line.empty() && subset_line.back() == '\r') subset_line.pop_back(); // remove the windows line endings
+        if (!subset_line.empty()) keep.insert(subset_line); // add id to the keep sest
     }
     std::cout << "Subset ids loaded: " << keep.size() << "\n";
     auto start = std::chrono::steady_clock::now(); // start the timer

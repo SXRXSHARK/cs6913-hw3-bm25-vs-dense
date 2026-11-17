@@ -13,6 +13,7 @@ blockmeta.txt
 *.npy
 runs/
 *.qrels
+*.txt
 
 # compiled programs
 parser
@@ -22,3 +23,6 @@ query-processor
 *.o
 __pycache__/trec_eval/
 trec_eval/
+
+# python virtual environment
+*.venv/

@@ -426,16 +426,16 @@ int main() {
     // run the 3 prepared query files, one after another
     std::vector<std::string> sets = {"dl19", "dl20", "dev"};
     for (std::string s : sets) {
-        std::ifstream queries_file(s + ".queries.tsv");  // e.g. dl19.queries.tsv
-        results_file.open("bm25_" + s + ".txt");         // e.g. bm25_dl19.txt
+        std::ifstream queries_file(s + ".queries.tsv"); // e.g. dl19.queries.tsv
+        results_file.open("bm25_" + s + ".txt");  // e.g. bm25_dl19.txt
         int num_queries = 0;
         auto start = std::chrono::steady_clock::now();
 
     while (std::getline(queries_file, line)){
         size_t tab = line.find('\t');
         if (tab == std::string::npos) continue;
-        current_query = line.substr(0, tab);         // query ID
-        std::string query = line.substr(tab + 1);    // query text
+        current_query = line.substr(0, tab); // query ID
+        std::string query = line.substr(tab + 1); // query text
         num_queries++;
 
         // normalize query
@@ -478,6 +478,6 @@ int main() {
 
 //my own notes 
 // Answer key file	For which queries
-// qrels.eval.one.tsv	dl19 (TREC 2019)
-// qrels.eval.two.tsv	dl20 (TREC 2020)
-// qrels.dev.tsv	dev
+// qrels.eval.one.tsv	dl19 (TREC 2019) - 43 questions
+// qrels.eval.two.tsv	dl20 (TREC 2020) - 54 questions
+// qrels.dev.tsv	dev - 1000 questions 
